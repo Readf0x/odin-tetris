@@ -171,11 +171,11 @@ main :: proc() {
       if tick_frames >= drop_speed {
         tick_frames = 0
         tmp_piece := active_piece
-        tmp_piece.pos[1] += 1
+        tmp_piece.pos.y += 1
         if check_collision(&tmp_piece) {
           place_piece(&active_piece)
         } else {
-          active_piece.pos[1] += 1
+          active_piece.pos.y += 1
         }
       }
     }
@@ -258,8 +258,8 @@ draw_piece :: proc(ref: ^Piece) {
     color := ref.data[j, i]
     if color != 0 {
       raylib.DrawRectangle(
-        i32(i+ref.pos[0])*(block_size+block_pad) + board_offset.x,
-        i32(j+ref.pos[1])*(block_size+block_pad) + board_offset.y,
+        i32(i+ref.pos.x)*(block_size+block_pad) + board_offset.x,
+        i32(j+ref.pos.y)*(block_size+block_pad) + board_offset.y,
         block_size,
         block_size,
         colors[color]
@@ -291,7 +291,7 @@ new_piece :: proc() {
 check_collision :: proc(ref: ^Piece) -> bool {
   for i in 0..<ref.size do for j in 0..<ref.size {
     color := ref.data[j, i]
-    x, y := ref.pos[0]+i, ref.pos[1]+j
+    x, y := ref.pos.x+i, ref.pos.y+j
     if color != 0 {
       if x < 0 || x > 9 \
       || y < 0 || y > 19 \
@@ -308,8 +308,8 @@ place_piece :: proc(ref: ^Piece) {
   for i in 0..<ref.size do for j in 0..<ref.size {
     color := ref.data[j, i]
     if color != 0 {
-      y := ref.pos[1]+j
-      if y < 20 do board[ref.pos[1]+j][ref.pos[0]+i] = color
+      y := ref.pos.y+j
+      if y < 20 do board[ref.pos.y+j][ref.pos.x+i] = color
     }
   }
   check_needed = true
@@ -332,22 +332,22 @@ hard_drop :: proc(ref: ^Piece) {
   found: bool
   for i in 0..<ref.size do for j in 0..<ref.size {
     color := mask.data[j, i]
-    if color != 0 && ref.pos[1]+j == 19 do found = true
+    if color != 0 && ref.pos.y+j == 19 do found = true
   }
   for !found {
     distance += 1
     for i in 0..<ref.size do for j in 0..<ref.size {
       color := mask.data[j, i]
-      y := ref.pos[1]+j+distance+1
+      y := ref.pos.y+j+distance+1
       if color != 0 {
-        if y >= 20 || board[y][ref.pos[0]+i] != 0 {
+        if y >= 20 || board[y][ref.pos.x+i] != 0 {
           found = true
           break
         }
       }
     }
   }
-  ref.pos[1] += distance
+  ref.pos.y += distance
   place_piece(ref)
 }
 
