@@ -20,7 +20,7 @@ pieces : [7]Piece = {
   piece_j,
   piece_i,
 }
-colors : [9]raylib.Color = {
+colors := [?]raylib.Color {
   bg2,
   yellow,
   green,

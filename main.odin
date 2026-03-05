@@ -1,6 +1,8 @@
 #+feature using-stmt
 package main
 
+import "core:os"
+import "vendor:sdl2"
 import "core:math"
 import "core:slice"
 import "core:fmt"
@@ -38,6 +40,7 @@ level : int
 lines : int
 drop_speed : u8 = 30
 
+paused : bool
 check_needed : bool
 tick_should_reset : bool
 
@@ -45,7 +48,19 @@ main :: proc() {
   using raylib
 
   InitWindow(res.x, res.y, "Tetris")
+  defer CloseWindow()
   SetTargetFPS(max_fps)
+  SetExitKey(.KEY_NULL)
+
+  gamepad : ^sdl2.GameController
+  event : sdl2.Event = {}
+  sdl_init := sdl2.Init({ .GAMECONTROLLER, .JOYSTICK, .EVENTS })
+  if sdl_init < 0 {
+    for i in 0..<sdl2.NumJoysticks() do if sdl2.IsGameController(i) {
+      gamepad = sdl2.GameControllerOpen(i)
+    }
+  }
+  defer if sdl_init < 0 do sdl2.Quit()
 
   next_piece = pieces[rand.choice_enum(PieceID)]
   new_piece()
@@ -61,24 +76,27 @@ main :: proc() {
   game_over_anim_line : int
 
   for !WindowShouldClose() {
-
-    if !frozen {
-      for m in mappings {
-        if IsKeyPressed(m.key) || IsKeyPressedRepeat(m.key) ||
-          (false if !m.hasKey2 else IsKeyPressed(m.key2) || IsKeyPressedRepeat(m.key2)) ||
-          (false if !m.hasKey3 else IsKeyPressed(m.key3) || IsKeyPressedRepeat(m.key3))
-        {
-          if !m.canCollide {
-            m.callback(&active_piece)
-          } else {
-            tmp_piece := active_piece
-            m.callback(&tmp_piece)
-            if !check_collision(&tmp_piece) {
-              m.callback(&active_piece)
-            }
+    for sdl2.PollEvent(&event) {
+      #partial switch event.type {
+      case .CONTROLLERDEVICEADDED:
+        gamepad = sdl2.GameControllerOpen(event.cdevice.which)
+      case .CONTROLLERDEVICEREMOVED:
+        if sdl2.JoystickID(event.cdevice.which) == sdl2.JoystickInstanceID(sdl2.GameControllerGetJoystick(gamepad)) {
+          sdl2.GameControllerClose(gamepad)
+        }
+      case .CONTROLLERBUTTONDOWN:
+        if !frozen do for m in mappings {
+          if sdl2.GameControllerButton(event.cbutton.button) == m.gamepad {
+            handle_keymap(m)
           }
         }
       }
+    }
+    if !frozen do for m in mappings {
+      if IsKeyPressed(m.key) || IsKeyPressedRepeat(m.key) \
+      || (false if !m.hasKey2 else IsKeyPressed(m.key2) || IsKeyPressedRepeat(m.key2)) \
+      || (false if !m.hasKey3 else IsKeyPressed(m.key3) || IsKeyPressedRepeat(m.key3)) \
+      { handle_keymap(m) }
     }
 
     if tick_should_reset do tick_frames = 0
@@ -166,7 +184,7 @@ main :: proc() {
     }
 
     // drop tick
-    if !frozen {
+    if !frozen && !paused {
       tick_frames += 1
       if tick_frames >= drop_speed {
         tick_frames = 0
@@ -238,10 +256,12 @@ main :: proc() {
       )
       if !frozen do draw_piece(&active_piece)
 
+      if paused {
+        DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(), { bg_dim.r, bg_dim.g, bg_dim.b, 0x50 })
+      }
+
     EndDrawing()
   }
-
-  CloseWindow()
 }
 
 reset :: proc() {
@@ -373,6 +393,18 @@ rotate :: proc(ref: ^Piece, direction: bool) {
       ref.data[i, j] ~= ref.data[i, 3-j]
     }
     if !direction do transpose(ref)
+  }
+}
+
+handle_keymap :: proc(m: KeyMap) {
+  if !m.canCollide {
+    m.callback(&active_piece)
+  } else {
+    tmp_piece := active_piece
+    m.callback(&tmp_piece)
+    if !check_collision(&tmp_piece) {
+      m.callback(&active_piece)
+    }
   }
 }
 

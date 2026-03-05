@@ -11,6 +11,7 @@ rec {
         projectName = "tetris";
         dependencies = with pkgs; [
           raylib
+          SDL2
         ];
       }; in ({
         projectName,
