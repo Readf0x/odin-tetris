@@ -15,9 +15,9 @@ KeyMap :: struct {
 
 mappings :: []KeyMap {
   {
-    key = .N,
+    key = .R,
     callback = proc(ref: ^Piece) {
-      new_piece(ref)
+      reset(ref)
     }
   },
   {

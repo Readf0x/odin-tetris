@@ -56,6 +56,11 @@ main :: proc() {
   CloseWindow()
 }
 
+reset :: proc(ref: ^Piece) {
+  board = [20][10]u8{}
+  new_piece(ref)
+}
+
 draw_piece :: proc(ref: ^Piece) {
   for i in 0..<ref.size do for j in 0..<ref.size {
     color := ref.data[j, i]
@@ -108,21 +113,20 @@ mask_bottommost :: proc(p: ^Piece) -> Piece {
 
 hard_drop :: proc(p: ^Piece) {
   mask := mask_bottommost(p)
-  fmt.println(mask)
   distance: int
   found: bool
   for !found {
+    distance += 1
     for i in 0..<p.size do for j in 0..<p.size {
       color := mask.data[j, i]
       y := p.pos[1]+j+distance+1
       if color != 0 {
-        if board[y][p.pos[0]+i] != 0 || y == 19 {
+        if  y == 20 || board[y][p.pos[0]+i] != 0 {
           found = true
           break
         }
       }
     }
-    distance += 1
   }
   p.pos[1] += distance
   place_piece(p)
