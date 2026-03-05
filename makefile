@@ -1,6 +1,5 @@
 PREFIX ?= /usr/local
 BINDIR ?= $(PREFIX)/bin
-MANDIR ?= $(PREFIX)/share/man
 
 build:
 	odin build . -out:tetris

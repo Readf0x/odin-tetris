@@ -1,7 +1,6 @@
 #+feature using-stmt
 package main
 
-import "core:os"
 import "vendor:sdl2"
 import "core:math"
 import "core:slice"
@@ -11,7 +10,7 @@ import "core:math/rand"
 import "vendor:raylib"
 
 i32_Vector2 :: [2]i32
-res : i32_Vector2 : {800, 600}
+res : i32_Vector2 : {400, 600}
 max_fps :: 30
 block_size : i32 : 20
 block_pad : i32 : 4
