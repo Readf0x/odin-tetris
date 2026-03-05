@@ -1,21 +1,45 @@
 #+feature using-stmt
 package main
 
+import "core:math"
 import "core:slice"
 import "core:fmt"
 import "base:intrinsics"
 import "core:math/rand"
 import "vendor:raylib"
 
-res : struct { x: i32, y: i32 } : {800, 600}
+i32_Vector2 :: [2]i32
+res : i32_Vector2 : {800, 600}
 max_fps :: 30
-block_size :: 20
-block_pad :: 4
+block_size : i32 : 20
+block_pad : i32 : 4
+
+board_size : i32_Vector2 : {
+  (block_size * 10) + (block_pad * 9),
+  (block_size * 20) + (block_pad * 19),
+}
+board_offset : i32_Vector2 : {
+  (res.x - board_size.x) / 2,
+  (res.y - board_size.y) / 2,
+}
+board_edges : i32_Vector2 : {
+  board_size.x + board_offset.x,
+  board_size.y + board_offset.y,
+}
+
+score_values := [4]int{ 4, 10, 30, 120 }
 
 board : [20][10]u8
+active_piece : Piece
+next_piece : Piece
 
 score : int
+level : int
+lines : int
+drop_speed : u8 = 30
+
 check_needed : bool
+tick_should_reset : bool
 
 main :: proc() {
   using raylib
@@ -23,14 +47,19 @@ main :: proc() {
   InitWindow(res.x, res.y, "Tetris")
   SetTargetFPS(max_fps)
 
-  active_piece : Piece
-  new_piece(&active_piece)
+  next_piece = pieces[rand.choice_enum(PieceID)]
+  new_piece()
 
   frozen : bool
 
   stored_lines := make([dynamic][10]u8, 0, 4)
   to_clear := make([dynamic]int, 0, 4)
-  animated_frames : i32
+  tick_frames : u8
+  animated_frames : u16
+
+  game_over : bool
+  game_over_anim_line : int
+
   for !WindowShouldClose() {
 
     if !frozen {
@@ -52,21 +81,21 @@ main :: proc() {
       }
     }
 
-    exit_early : bool
+    if tick_should_reset do tick_frames = 0
+
     if check_needed {
       for j in 0..<20 {
-        if exit_early {
-          exit_early = false
+        if game_over {
           break
         }
         for i in 0..<10 {
           color := board[j][i]
           if j == 0 {
             if color != 0 {
-              reset(&active_piece)
-              exit_early = true
+              frozen = true
+              game_over = true
+              break
             }
-            break
           } else {
             if color == 0 do break
             else if i == 9 do append(&to_clear, j)
@@ -75,51 +104,139 @@ main :: proc() {
       }
       check_needed = false
     }
-    if len(to_clear) > 0 && animated_frames == 0 {
-      frozen = true
-      for line in to_clear {
-        append(&stored_lines, board[line])
-      }
-    }
-    if len(to_clear) > 0 && animated_frames > 30 {
-      defer clear(&to_clear)
-      defer clear(&stored_lines)
-      tmp_board : [20][10]u8
-      skipped : int
-      for i := 19; i >= 0; i -= 1 {
-        if slice.contains(to_clear[:], i) {
-          skipped += 1
-          continue
-        }
-        tmp_board[i+skipped] = board[i]
-      }
-      board = tmp_board
-      animated_frames = 0
-      frozen = false
-    }
+
+    // line clear anim
     if len(to_clear) > 0 {
-      animated_frames += 1
-      if animated_frames % 5 == 0 {
-        if board[to_clear[0]][0] == 8 {
-          for _, i in to_clear {
-            board[to_clear[i]] = stored_lines[i]
-          }
-        } else {
-          for line in to_clear {
-            board[line] = { 0..<10 = 8 }
-          }
+      if animated_frames == 0 {
+        frozen = true
+        for line in to_clear {
+          append(&stored_lines, board[line])
         }
-      } 
+      }
+      if animated_frames > 30 {
+        defer {
+          clear(&to_clear)
+          clear(&stored_lines)
+        }
+        tmp_board : [20][10]u8
+        skipped : int
+        for i := 19; i >= 0; i -= 1 {
+          if slice.contains(to_clear[:], i) {
+            skipped += 1
+            continue
+          }
+          tmp_board[i+skipped] = board[i]
+        }
+        lines += len(to_clear)
+        score += score_values[len(to_clear)-1] * (level+1)
+        level = lines / 10
+        drop_speed = cast (u8) math.max(1, 30 - level)
+        board = tmp_board
+        animated_frames = 0
+        frozen = false
+      } else {
+        animated_frames += 1
+        if animated_frames % 5 == 0 {
+          if board[to_clear[0]][0] == 8 {
+            for _, i in to_clear {
+              board[to_clear[i]] = stored_lines[i]
+            }
+          } else {
+            for line in to_clear {
+              board[line] = { 0..<10 = 8 }
+            }
+          }
+        } 
+      }
+    }
+
+    //game over anim
+    if game_over {
+      if animated_frames % 5 == 0 {
+        if game_over_anim_line == 20 {
+          reset()
+          frozen = false
+          game_over = false
+        } else {
+          board[game_over_anim_line] = { 0..<10 = 8 }
+          game_over_anim_line += 1
+        }
+      }
+      animated_frames += 1
+    }
+
+    // drop tick
+    if !frozen {
+      tick_frames += 1
+      if tick_frames >= drop_speed {
+        tick_frames = 0
+        tmp_piece := active_piece
+        tmp_piece.pos[1] += 1
+        if check_collision(&tmp_piece) {
+          place_piece(&active_piece)
+        } else {
+          active_piece.pos[1] += 1
+        }
+      }
     }
 
     BeginDrawing()
 
-    ClearBackground(bg0)
-    for j in 0..<20 do for i in 0..<10 {
-      color := board[j][i]
-      raylib.DrawRectangle(i32(i)*(block_size+block_pad), i32(j)*(block_size+block_pad), block_size, block_size, colors[color])
-    }
-    if !frozen do draw_piece(&active_piece)
+      ClearBackground(bg0)
+      for j in 0..<20 do for i in 0..<10 {
+        color := board[j][i]
+        raylib.DrawRectangle(
+          i32(i)*(block_size+block_pad) + board_offset.x,
+          i32(j)*(block_size+block_pad) + board_offset.y,
+          block_size,
+          block_size,
+          colors[color]
+        )
+      }
+      draw_ghost(&next_piece, board_edges.x + block_pad, board_offset.y)
+      DrawText(
+        "Score:",
+        board_edges.x + block_pad,
+        board_offset.y + (block_size * i32(next_piece.size)) + (block_pad * i32(next_piece.size - 1)),
+        20,
+        fg,
+      )
+      DrawText(
+        fmt.caprintf("%4d0", score),
+        board_edges.x + block_pad,
+        board_offset.y + (block_size * i32(next_piece.size)) + (block_pad * i32(next_piece.size - 1)) + 20,
+        20,
+        fg,
+      )
+      DrawText(
+        "Lines:",
+        board_edges.x + block_pad,
+        board_offset.y + (block_size * i32(next_piece.size)) + (block_pad * i32(next_piece.size - 1)) + 40,
+        20,
+        fg,
+      )
+      DrawText(
+        fmt.caprintf("%3d", lines),
+        board_edges.x + block_pad,
+        board_offset.y + (block_size * i32(next_piece.size)) + (block_pad * i32(next_piece.size - 1)) + 60,
+        20,
+        fg,
+      )
+      DrawText(
+        "Level:",
+        board_edges.x + block_pad,
+        board_offset.y + (block_size * i32(next_piece.size)) + (block_pad * i32(next_piece.size - 1)) + 80,
+        20,
+        fg,
+      )
+      DrawText(
+        fmt.caprintf("%2d", level),
+        board_edges.x + block_pad,
+        board_offset.y + (block_size * i32(next_piece.size)) + (block_pad * i32(next_piece.size - 1)) + 100,
+        20,
+        fg,
+      )
+      if !frozen do draw_piece(&active_piece)
 
     EndDrawing()
   }
@@ -127,9 +244,13 @@ main :: proc() {
   CloseWindow()
 }
 
-reset :: proc(ref: ^Piece) {
+reset :: proc() {
   board = [20][10]u8{}
-  new_piece(ref)
+  new_piece()
+  score = 0
+  level = 0
+  lines = 0
+  drop_speed = 30
 }
 
 draw_piece :: proc(ref: ^Piece) {
@@ -137,8 +258,8 @@ draw_piece :: proc(ref: ^Piece) {
     color := ref.data[j, i]
     if color != 0 {
       raylib.DrawRectangle(
-        i32(i+ref.pos[0])*(block_size+block_pad),
-        i32(j+ref.pos[1])*(block_size+block_pad),
+        i32(i+ref.pos[0])*(block_size+block_pad) + board_offset.x,
+        i32(j+ref.pos[1])*(block_size+block_pad) + board_offset.y,
         block_size,
         block_size,
         colors[color]
@@ -147,14 +268,30 @@ draw_piece :: proc(ref: ^Piece) {
   }
 }
 
-new_piece :: proc(ref: ^Piece) {
-  ref^ = pieces[rand.choice_enum(PieceID)]
+draw_ghost :: proc(ref: ^Piece, x, y: i32, size : i32 = block_size, pad : i32 = block_pad) {
+  for i in 0..<ref.size do for j in 0..<ref.size {
+    color := ref.data[j, i]
+    if color != 0 {
+      raylib.DrawRectangle(
+        i32(i)*(size+pad) + x,
+        i32(j)*(size+pad) + y,
+        size,
+        size,
+        colors[color]
+      )
+    }
+  }
 }
 
-check_collision :: proc(p: ^Piece) -> bool {
-  for i in 0..<p.size do for j in 0..<p.size {
-    color := p.data[j, i]
-    x, y := p.pos[0]+i, p.pos[1]+j
+new_piece :: proc() {
+  active_piece = next_piece
+  next_piece = pieces[rand.choice_enum(PieceID)]
+}
+
+check_collision :: proc(ref: ^Piece) -> bool {
+  for i in 0..<ref.size do for j in 0..<ref.size {
+    color := ref.data[j, i]
+    x, y := ref.pos[0]+i, ref.pos[1]+j
     if color != 0 {
       if x < 0 || x > 9 \
       || y < 0 || y > 19 \
@@ -167,51 +304,51 @@ check_collision :: proc(p: ^Piece) -> bool {
   return false
 }
 
-place_piece :: proc(p: ^Piece) {
-  for i in 0..<p.size do for j in 0..<p.size {
-    color := p.data[j, i]
+place_piece :: proc(ref: ^Piece) {
+  for i in 0..<ref.size do for j in 0..<ref.size {
+    color := ref.data[j, i]
     if color != 0 {
-      y := p.pos[1]+j
-      if y < 20 do board[p.pos[1]+j][p.pos[0]+i] = color
+      y := ref.pos[1]+j
+      if y < 20 do board[ref.pos[1]+j][ref.pos[0]+i] = color
     }
   }
   check_needed = true
-  new_piece(p)
+  new_piece()
 }
 
-mask_bottommost :: proc(p: ^Piece) -> Piece {
+mask_bottommost :: proc(ref: ^Piece) -> Piece {
   mask : Piece
-  for i in 0..<p.size do for j in 0..<p.size {
-    if j == p.size - 1 || p.data[j+1, i] == 0 {
-      mask.data[j, i] = p.data[j, i]
+  for i in 0..<ref.size do for j in 0..<ref.size {
+    if j == ref.size - 1 || ref.data[j+1, i] == 0 {
+      mask.data[j, i] = ref.data[j, i]
     }
   }
   return mask
 }
 
-hard_drop :: proc(p: ^Piece) {
-  mask := mask_bottommost(p)
+hard_drop :: proc(ref: ^Piece) {
+  mask := mask_bottommost(ref)
   distance: int
   found: bool
-  for i in 0..<p.size do for j in 0..<p.size {
+  for i in 0..<ref.size do for j in 0..<ref.size {
     color := mask.data[j, i]
-    if color != 0 && p.pos[1]+j == 19 do found = true
+    if color != 0 && ref.pos[1]+j == 19 do found = true
   }
   for !found {
     distance += 1
-    for i in 0..<p.size do for j in 0..<p.size {
+    for i in 0..<ref.size do for j in 0..<ref.size {
       color := mask.data[j, i]
-      y := p.pos[1]+j+distance+1
+      y := ref.pos[1]+j+distance+1
       if color != 0 {
-        if y >= 20 || board[y][p.pos[0]+i] != 0 {
+        if y >= 20 || board[y][ref.pos[0]+i] != 0 {
           found = true
           break
         }
       }
     }
   }
-  p.pos[1] += distance
-  place_piece(p)
+  ref.pos[1] += distance
+  place_piece(ref)
 }
 
 rotate :: proc(ref: ^Piece, direction: bool) {

@@ -17,7 +17,7 @@ mappings :: []KeyMap {
   {
     key = .R,
     callback = proc(ref: ^Piece) {
-      reset(ref)
+      reset()
     }
   },
   {
@@ -71,4 +71,12 @@ mappings :: []KeyMap {
       hard_drop(ref)
     }
   },
+  /*{
+    key = .P,
+    callback = proc(ref: ^Piece) {
+      board[19] = { 0..<10 = 7 }
+      lines = 300
+      check_needed = true
+    }
+  }*/
 }

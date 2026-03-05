@@ -29,8 +29,13 @@ rec {
             pname = projectName;
             version = "0.1";
             src = ./.;
-            nativeBuildInputs = [];
+
+            nativeBuildInputs = with pkgs; [ odin raylib ];
             buildInputs = [];
+
+            DESTDIR = placeholder "out";
+            PREFIX = "";
+
             meta = {
               inherit description;
               homepage = "";

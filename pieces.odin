@@ -85,7 +85,7 @@ piece_l : Piece : {
     0, 5, 5, 0,
     0, 0, 0, 0,
   },
-  pos = { 3, 0 },
+  pos = { 4, 0 },
 }
 piece_j : Piece : {
   size = 3,
@@ -96,7 +96,7 @@ piece_j : Piece : {
     6, 6, 0, 0,
     0, 0, 0, 0,
   },
-  pos = { 3, 0 },
+  pos = { 4, 0 },
 }
 piece_o : Piece : {
   size = 2,
