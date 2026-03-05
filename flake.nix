@@ -31,7 +31,7 @@ rec {
             version = "0.1";
             src = ./.;
 
-            nativeBuildInputs = with pkgs; [ odin raylib ];
+            nativeBuildInputs = with pkgs; [ odin ] ++ dependencies;
             buildInputs = [];
 
             DESTDIR = placeholder "out";
